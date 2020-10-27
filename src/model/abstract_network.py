@@ -296,12 +296,12 @@ class AbstractNetwork(nn.Module):
         for k,v in self.counters.items():
             v.reset()
 
-    def print_counters_info(self, logger, epoch, mode="Train"):
+    def print_counters_info(self, logger, epoch, mode="Train", is_new_best=False, config=None):
         val_list = self._get_print_list(mode)
-        txt = "[{}] {} epoch {} iter".format(mode, epoch, self.it)
+        txt = "[{}] {} epoch {} iter:".format(mode, epoch, self.it)
         for k in val_list:
             v = self.counters[k]
-            txt += ", {} = {:.4f}".format(v.get_name(), v.get_average())
+            txt += " {} {:.3f}".format(v.get_name(), v.get_average()*100)
         if logger:
             logger.info(txt)
         else:
@@ -309,6 +309,10 @@ class AbstractNetwork(nn.Module):
 
         if self.use_tf_summary:
             self.write_counter_summary(epoch, mode)
+
+        if is_new_best:
+            with open(os.path.join(config["misc"]["result_dir"], 'results.txt'), 'a') as fobj:
+                fobj.write(f'{txt}\n')
 
         # reset counters
         self.reset_counters()

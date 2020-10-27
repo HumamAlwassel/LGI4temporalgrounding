@@ -44,13 +44,12 @@ class CharadesDataset(AbstractDataset):
         self.data_dir = config.get("data_dir", "data/charades")
         self.feature_type = config.get("feature_type", "I3D")
         self.in_memory = config.get("in_memory", False)
-        if self.feature_type == "I3D":
-            self.feat_path = config.get(
+        self.feat_hdf5 = config.get("video_feature_path",
+                "data/charades/features/i3d_finetuned/i3d_finetuned.h5")
+        self.feat_path = config.get(
                 "video_feature_path",
-                "data/charades/features/i3d_finetuned/{}.npy"
+                "data/charades/features/i3d_finetuned.h5"
             )
-        else:
-            raise ValueError("Wrong feature_type")
 
         # get paths for proposals and captions
         paths = self._get_data_path(config)
@@ -65,8 +64,10 @@ class CharadesDataset(AbstractDataset):
         # load features if use in_memory
         if self.in_memory:
             self.feats = {}
+            h = io_utils.load_hdf5(self.feat_hdf5, verbose=False)
             for vid in tqdm(self.vids, desc="In-Memory: vid_feat"):
-                self.feats[vid] = np.load(self.feat_path.format(vid)).squeeze()
+                self.feats[vid] = h[vid][()]
+            h.close()
 
             self.s_pos, self.e_pos, self.att_mask = {}, {}, {}
             grd_info = io_utils.load_hdf5(self.paths["grounding_info"], False)
@@ -114,15 +115,15 @@ class CharadesDataset(AbstractDataset):
             end_pos = grd_info["end_pos/"+qid][()]
 
         # get video features
-        if self.feature_type == "I3D":
-            if self.in_memory:
-                vid_feat_all = self.feats[vid]
-            else:
-                vid_feat_all = np.load(self.feat_path.format(vid)).squeeze()
-            vid_feat, nfeats, start_index, end_index = self.get_fixed_length_feat(
-                vid_feat_all, self.S, start_pos, end_pos)
+        if self.in_memory:
+            vid_feat_all = self.feats[vid]
         else:
-            raise ValueError("Wrong feature_type")
+            h = io_utils.load_hdf5(self.feat_hdf5, verbose=False)
+            vid_feat_all = h[vid][()]
+            h.close()
+        vid_feat, nfeats, start_index, end_index = self.get_fixed_length_feat(
+            vid_feat_all, self.S, start_pos, end_pos)
+
 
         vid_mask = np.zeros((self.S, 1))
         vid_mask[:nfeats] = 1
@@ -292,6 +293,7 @@ class CharadesDataset(AbstractDataset):
 
         """ Grounding information """
         if not os.path.exists(self.paths["grounding_info"]):
+            h = io_utils.load_hdf5(self.feat_hdf5, verbose=False)
             grd_dataset = io_utils.open_hdf5(self.paths["grounding_info"], "w")
             start_pos = grd_dataset.create_group("start_pos")
             end_pos = grd_dataset.create_group("end_pos")
@@ -306,12 +308,7 @@ class CharadesDataset(AbstractDataset):
 
                 # get attention calibration mask
                 vid = ann["video_id"]
-                if self.feature_type == "I3D":
-                    nfeats = np.load(self.feat_path.format(vid)).shape[0]
-                else:
-                    raise NotImplementedError()
-
-                nfeats = min(nfeats, self.S)
+                nfeats = min(h[vid].shape[0], self.S)
 
                 fs = utils.timestamp_to_featstamp(ts, nfeats, vid_d)
                 att_mask = np.zeros((self.S))
@@ -323,6 +320,7 @@ class CharadesDataset(AbstractDataset):
 
             # save the encoded proposal labels and video ids
             grd_dataset.close()
+            h.close()
 
 
 # for debugging

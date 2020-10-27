@@ -3,26 +3,37 @@ import argparse
 
 from src.experiment import common_functions as cmf
 from src.utils import timer
-
+import datetime
+import time
 
 """ Get parameters """
 def _get_argument_params():
-	parser = argparse.ArgumentParser(
-		formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-	parser.add_argument("--config_path",
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument("--config_path",
         default="src/experiment/options/default.yml", help="Path to config file.")
-	parser.add_argument("--method_type",
+    parser.add_argument("--method_type",
         default="ensemble", help="Method type among [||].")
-	parser.add_argument("--dataset",
+    parser.add_argument("--dataset",
         default="didemo", help="Dataset to train models [|].")
-	parser.add_argument("--num_workers", type=int,
+    parser.add_argument("--num_workers", type=int,
         default=4, help="The number of workers for data loader.")
-	parser.add_argument("--debug_mode" , action="store_true", default=False,
-		help="Train the model in debug mode.")
+    parser.add_argument("--debug_mode" , action="store_true", default=False,
+        help="Train the model in debug mode.")
+    parser.add_argument("--output_path" , required=True,
+        help="path to the experiment root folder to save results")
+    parser.add_argument("--feature_type" , required=True,
+        help="feature_type")
+    parser.add_argument("--video_feature_path" , required=True,
+        help="video_feature_path")
+    parser.add_argument("--init_lr", default=0.0004, type=float,
+        help="init_lr")
+    parser.add_argument("--feat_dim", default=1024, type=int,
+        help="feat_dim")
 
-	params = vars(parser.parse_args())
-	print(json.dumps(params, indent=4))
-	return params
+    params = vars(parser.parse_args())
+    print(json.dumps(params, indent=4))
+    return params
 
 """ Training the network """
 def train(config):
@@ -38,11 +49,11 @@ def train(config):
     net, init_step = cmf.factory_model(config, M, dsets["train"], it_logger)
 
     # Prepare tensorboard
-    net.create_tensorboard_summary(config["misc"]["tensorboard_dir"])
+    #net.create_tensorboard_summary(config["misc"]["tensorboard_dir"])
 
     """ Run training network """
     eval_every = config["evaluation"].get("every_eval", 1) # epoch
-    eval_after= config["evaluation"].get("after_eval", 0) # epoch
+    eval_after= config["evaluation"].get("evaluate_after", 0) # epoch
     print_every = config["misc"].get("print_every", 1) # iteration
     num_step = config["optimize"].get("num_step", 30) # epoch
     apply_cl_after = config["model"].get("curriculum_learning_at", -1)
@@ -64,6 +75,7 @@ def train(config):
     tm = timer.Timer() # tm: timer
     print("=====> # of iteration per one epoch: {}".format(len(L["train"])))
     for epoch in range(init_step, init_step+num_step):
+        start_time = time.time()
         # curriculum learning
         if (apply_cl_after > 0) and (epoch == apply_cl_after):
             net.apply_curriculum_learning()
@@ -109,7 +121,11 @@ def train(config):
 
             net.train_mode() # set network as train mode
             net.reset_status() # initialize status
-
+        epoch_time = time.time() - start_time
+        epoch_time_str = str(datetime.timedelta(seconds=int(epoch_time)))
+        eta_time = (init_step+num_step - epoch) * epoch_time
+        eta_time_str = str(datetime.timedelta(seconds=int(eta_time)))
+        print('~~~~~~~~~~~~~~~~~~~~~ Epoch {} time {} eta {}'.format(epoch, epoch_time_str, eta_time_str))
 
 
 if __name__ == "__main__":

@@ -4,6 +4,7 @@ import numpy as np
 def compute_tiou(pred, gt):
     intersection = max(0, min(pred[1], gt[1]) - max(pred[0], gt[0]))
     union = max(pred[1], gt[1]) - min(pred[0], gt[0])
+    if union <= 0: return 0
     return float(intersection) / union
 
 def rank(pred, gt):
@@ -21,9 +22,9 @@ def get_evaluator(dt="didemo"):
 class TALLEvaluator(object):
     def __init__(self):
         self.tiou_threshold = [0.1, 0.3, 0.5, 0.7]
-        self.metrics = ["R1-0.1", "R1-0.3", "R1-0.5", "R1-0.7", "mIoU"]
-        #self.metrics = ["R1-0.3", "R1-0.5", "R1-0.7",
-        #                "R5-0.3", "R5-0.5", "R5-0.7"]
+        #self.metrics = ["R1-0.1", "R1-0.3", "R1-0.5", "R1-0.7", "mIoU"]
+        self.metrics = ["R1-0.1", "R1-0.3", "R1-0.5", "R1-0.7",
+                        "R5-0.1", "R5-0.3", "R5-0.5", "R5-0.7", "mIoU"]
         self.duration = None
 
     def get_metric(self):

@@ -33,13 +33,18 @@ def update_config_from_params(config, params):
     config["misc"]["debug"] = params.get("debug_mode", False)
     config["misc"]["num_workers"] = params.get("num_workers", 0)
     config["misc"]["dataset"] = params["dataset"]
-    exp_prefix = utils.get_filename_from_path(
-            params["config_path"], delimiter="options/") if "options" in params["config_path"] \
-            else utils.get_filename_from_path(params["config_path"], delimiter="results/")[:-7]
-    config["misc"]["exp_prefix"] = exp_prefix
-    config["misc"]["result_dir"] = os.path.join("results", exp_prefix)
-    config["misc"]["tensorboard_dir"] = os.path.join("tensorboard", exp_prefix)
+    config["misc"]["result_dir"] = params["output_path"]
+    config["misc"]["tensorboard_dir"] = params["output_path"]
     config["misc"]["method_type"] = params["method_type"]
+
+    config["train_loader"]["feature_type"] = params["feature_type"]
+    config["train_loader"]["video_feature_path"] = params["video_feature_path"]
+    config["test_loader"]["feature_type"] = params["feature_type"]
+    config["test_loader"]["video_feature_path"] = params["video_feature_path"]
+
+    config["model"]["video_enc_vemb_idim"] = params["feat_dim"]
+    config["optimize"]["init_lr"] = params["init_lr"]
+
     if not "use_gpu" in config["model"].keys():
         if torch.cuda.is_available():
             config["model"]["use_gpu"] = True
@@ -130,13 +135,15 @@ def test(config, loader, net, epoch, eval_logger=None, mode="Test"):
             # end for batch in loader
 
         net.save_results("epoch{:03d}".format(epoch), mode=mode)
+        is_new_best = False
         if epoch > 0 and net.renew_best_score():
+            is_new_best = True
             ckpt_path = os.path.join(config["misc"]["result_dir"], "checkpoints")
             net.save_checkpoint(os.path.join(
                     ckpt_path, "epoch{:03d}.pkl".format(epoch)))
             net.save_checkpoint(os.path.join(
                     ckpt_path, "best.pkl".format(epoch)))
-        net.print_counters_info(eval_logger, epoch, mode=mode)
+        net.print_counters_info(eval_logger, epoch, mode=mode, is_new_best=is_new_best, config=config)
 
 """ miscs """
 def extract_output(config, loader, net, save_dir):
